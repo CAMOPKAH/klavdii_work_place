@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Арканоид</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="game-container">
+        <header class="game-header">
+            <h1><i class="fas fa-gamepad"></i> АРКАНОИД</h1>
+            <div class="game-info">
+                <div class="score-container">
+                    <span class="info-label"><i class="fas fa-star"></i> Счет:</span>
+                    <span id="score" class="info-value">0</span>
+                </div>
+                <div class="lives-container">
+                    <span class="info-label"><i class="fas fa-heart"></i> Жизни:</span>
+                    <span id="lives" class="info-value">3</span>
+                </div>
+                <div class="level-container">
+                    <span class="info-label"><i class="fas fa-layer-group"></i> Уровень:</span>
+                    <span id="level" class="info-value">1</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="game-content">
+            <div class="game-area">
+                <canvas id="gameCanvas" width="800" height="600"></canvas>
+                <div id="gameOver" class="game-over">
+                    <h2>ИГРА ОКОНЧЕНА</h2>
+                    <p>Ваш счет: <span id="finalScore">0</span></p>
+                    <button id="restartButton" class="game-button">
+                        <i class="fas fa-redo"></i> Играть снова
+                    </button>
+                </div>
+                <div id="levelComplete" class="level-complete">
+                    <h2>УРОВЕНЬ ПРОЙДЕН!</h2>
+                    <p>Переход на уровень <span id="nextLevel">2</span></p>
+                    <button id="nextLevelButton" class="game-button">
+                        <i class="fas fa-arrow-right"></i> Следующий уровень
+                    </button>
+                </div>
+                <div id="startScreen" class="start-screen">
+                    <h2>АРКАНОИД</h2>
+                    <div class="controls-info">
+                        <p><i class="fas fa-arrow-left"></i> <i class="fas fa-arrow-right"></i> Управление платформой</p>
+                        <p><i class="fas fa-space-shuttle"></i> Пробел - запуск мяча</p>
+                        <p><i class="fas fa-pause"></i> P - пауза</p>
+                    </div>
+                    <button id="startButton" class="game-button start-button">
+                        <i class="fas fa-play"></i> НАЧАТЬ ИГРУ
+                    </button>
+                    <div class="instructions">
+                        <h3><i class="fas fa-info-circle"></i> Как играть:</h3>
+                        <p>Разбейте все кирпичи мячом, управляя платформой внизу экрана.</p>
+                        <p>Не дайте мячу упасть вниз - каждая потерянная жизнь уменьшает количество попыток.</p>
+                        <p>Разные цвета кирпичей дают разное количество очков.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls-panel">
+                <h3><i class="fas fa-sliders-h"></i> Управление</h3>
+                <div class="control-buttons">
+                    <button id="pauseButton" class="control-button">
+                        <i class="fas fa-pause"></i> Пауза
+                    </button>
+                    <button id="soundToggle" class="control-button">
+                        <i class="fas fa-volume-up"></i> Звук
+                    </button>
+                    <button id="resetButton" class="control-button">
+                        <i class="fas fa-undo"></i> Сброс
+                    </button>
+                </div>
+                
+                <div class="difficulty">
+                    <h4><i class="fas fa-tachometer-alt"></i> Сложность:</h4>
+                    <div class="difficulty-buttons">
+                        <button id="easyButton" class="difficulty-button active">Легко</button>
+                        <button id="mediumButton" class="difficulty-button">Средне</button>
+                        <button id="hardButton" class="difficulty-button">Сложно</button>
+                    </div>
+                </div>
+                
+                <div class="powerups">
+                    <h4><i class="fas fa-bolt"></i> Бонусы:</h4>
+                    <div class="powerup-list">
+                        <div class="powerup-item">
+                            <span class="powerup-color red"></span>
+                            <span>Большая платформа</span>
+                        </div>
+                        <div class="powerup-item">
+                            <span class="powerup-color blue"></span>
+                            <span>Быстрый мяч</span>
+                        </div>
+                        <div class="powerup-item">
+                            <span class="powerup-color green"></span>
+                            <span>Доп. жизнь</span>
+                        </div>
+                        <div class="powerup-item">
+                            <span class="powerup-color yellow"></span>
+                            <span>Мультимяч</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer class="game-footer">
+            <p>Используйте клавиши ← и → для управления платформой | Пробел для запуска мяча</p>
+            <p class="copyright">© 2025 Арканоид | Создано с <i class="fas fa-heart"></i></p>
+        </footer>
+    </div>
+
+    <audio id="brickHitSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-unlock-game-notification-253.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="paddleHitSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-retro-game-emergency-alarm-1000.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="wallHitSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-game-ball-tap-2073.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="gameOverSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-game-over-tetris-2037.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="levelCompleteSound" preload="auto">
+        <source src="https://assets.mixkit.co/sfx/preview/mixkit-winning-chimes-2015.mp3" type="audio/mpeg">
+    </audio>
+
+    <script src="game.js"></script>
+</body>
+</html>

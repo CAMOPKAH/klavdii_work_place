@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Арканоид</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+        }
+        
+        #canvasContainer {
+            width: 100%;
+            height: 100%;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #00ff88;
+        }
+        
+        #score {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00ff88;
+            margin-bottom: 10px;
+        }
+        
+        #lives {
+            font-size: 20px;
+            color: #ff4444;
+            margin-bottom: 10px;
+        }
+        
+        #level {
+            font-size: 20px;
+            color: #4488ff;
+        }
+        
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            border: 3px solid #ff4444;
+            display: none;
+            z-index: 200;
+        }
+        
+        #gameOver h2 {
+            color: #ff4444;
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        
+        #finalScore {
+            font-size: 28px;
+            color: #00ff88;
+            margin-bottom: 30px;
+        }
+        
+        #restartBtn {
+            background: linear-gradient(45deg, #00ff88, #0088ff);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        #restartBtn:hover {
+            transform: scale(1.05);
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #4488ff;
+        }
+        
+        #controls p {
+            margin-bottom: 10px;
+            color: #4488ff;
+        }
+        
+        .key {
+            display: inline-block;
+            background: #333;
+            padding: 5px 10px;
+            margin: 0 5px;
+            border-radius: 5px;
+            border: 1px solid #666;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="canvasContainer"></div>
+        
+        <div id="ui">
+            <div id="score">Очки: 0</div>
+            <div id="lives">Жизни: 3</div>
+            <div id="level">Уровень: 1</div>
+        </div>
+        
+        <div id="controls">
+            <p>Управление:</p>
+            <div>
+                <span class="key">←</span> <span class="key">→</span> - Движение платформы
+            </div>
+            <div style="margin-top: 5px;">
+                <span class="key">ПРОБЕЛ</span> - Запуск мяча
+            </div>
+        </div>
+        
+        <div id="gameOver">
+            <h2>ИГРА ОКОНЧЕНА</h2>
+            <div id="finalScore">Очки: 0</div>
+            <button id="restartBtn">ИГРАТЬ СНОВА</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        class Game3D {
+            constructor() {
+                this.score = 0;
+                this.lives = 3;
+                this.level = 1;
+                this.blocks = [];
+                this.ballLaunched = false;
+                this.gameOver = false;
+                
+                this.init();
+                this.createScene();
+                this.createBlocks();
+                this.createPlatform();
+                this.createBall();
+                this.setupControls();
+                this.animate();
+            }
+            
+            init() {
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x0a0a1a);
+                
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.camera.position.set(0, 5, 15);
+                this.camera.lookAt(0, 0, 0);
+                
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.shadowMap.enabled = true;
+                this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+                
+                document.getElementById('canvasContainer').appendChild(this.renderer.domElement);
+                
+                this.addLights();
+                this.addWalls();
+                
+                window.addEventListener('resize', () => this.onWindowResize());
+            }
+            
+            addLights() {
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                this.scene.add(ambientLight);
+                
+                const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+                directionalLight.position.set(10, 20, 10);
+                directionalLight.castShadow = true;
+                directionalLight.shadow.camera.left = -20;
+                directionalLight.shadow.camera.right = 20;
+                directionalLight.shadow.camera.top = 20;
+                directionalLight.shadow.camera.bottom = -20;
+                this.scene.add(directionalLight);
+                
+                const pointLight = new THREE.PointLight(0x4488ff, 0.5, 50);
+                pointLight.position.set(0, 10, 0);
+                this.scene.add(pointLight);
+            }
+            
+            addWalls() {
+                const wallMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0x222233,
+                    transparent: true,
+                    opacity: 0.3
+                });
+                
+                const wallGeometry = new THREE.BoxGeometry(20, 10, 0.5);
+                
+                const backWall = new THREE.Mesh(wallGeometry, wallMaterial);
+                backWall.position.z = -10;
+                this.scene.add(backWall);
+                
+                const leftWall = new THREE.Mesh(wallGeometry, wallMaterial);
+                leftWall.rotation.y = Math.PI / 2;
+                leftWall.position.x = -10;
+                this.scene.add(leftWall);
+                
+                const rightWall = new THREE.Mesh(wallGeometry, wallMaterial);
+                rightWall.rotation.y = Math.PI / 2;
+                rightWall.position.x = 10;
+                this.scene.add(rightWall);
+                
+                const floor = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 20), wallMaterial);
+                floor.position.y = -5;
+                this.scene.add(floor);
+                
+                const ceiling = new THREE.Mesh(new THREE.BoxGeometry(20, 0.5, 20), wallMaterial);
+                ceiling.position.y = 5;
+                this.scene.add(ceiling);
+            }
+            
+            createBlocks() {
+                const colors = [
+                    0xff4444, 0xff8844, 0xffff44,
+                    0x44ff44, 0x4488ff, 0x8844ff
+                ];
+                
+                for (let row = 0; row < 4; row++) {
+                    for (let col = 0; col < 8; col++) {
+                        const blockGeometry = new THREE.BoxGeometry(1.8, 0.5, 0.8);
+                        const blockMaterial = new THREE.MeshPhongMaterial({ 
+                            color: colors[row % colors.length],
+                            shininess: 100
+                        });
+                        
+                        const block = new THREE.Mesh(blockGeometry, blockMaterial);
+                        block.position.x = (col - 3.5) * 2;
+                        block.position.y = 3 - row * 1.2;
+                        block.position.z = -5;
+                        block.castShadow = true;
+                        block.receiveShadow = true;
+                        
+                        block.userData = {
+                            health: 1,
+                            points: (4 - row) * 10
+                        };
+                        
+                        this.scene.add(block);
+                        this.blocks.push(block);
+                    }
+                }
+            }
+            
+            createPlatform() {
+                const platformGeometry = new THREE.BoxGeometry(3, 0.3, 1);
+                const platformMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0x00ff88,
+                    shininess: 50
+                });
+                
+                this.platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                this.platform.position.y = -3;
+                this.platform.castShadow = true;
+                this.platform.receiveShadow = true;
+                
+                this.scene.add(this.platform);
+            }
+            
+            createBall() {
+                const ballGeometry = new THREE.SphereGeometry(0.3, 32, 32);
+                const ballMaterial = new THREE.MeshPhongMaterial({ 
+                    color: 0xffffff,
+                    shininess: 100,
+                    emissive: 0x4488ff,
+                    emissiveIntensity: 0.2
+                });
+                
+                this.ball = new THREE.Mesh(ballGeometry, ballMaterial);
+                this.ball.position.copy(this.platform.position);
+                this.ball.position.y += 0.5;
+                this.ball.castShadow = true;
+                
+                this.ballVelocity = new THREE.Vector3(0, 0, 0);
+                
+                this.scene.add(this.ball);
+            }
+            
+            setupControls() {
+                this.keys = {};
+                
+                document.addEventListener('keydown', (e) => {
+                    this.keys[e.key] = true;
+                    
+                    if (e.key === ' ' && !this.ballLaunched && !this.gameOver) {
+                        this.launchBall();
+                    }
+                    
+                    if (e.key === 'r' || e.key === 'R' || e.key === 'к' || e.key === 'К') {
+                        this.restartGame();
+                    }
+                });
+                
+                document.addEventListener('keyup', (e) => {
+                    this.keys[e.key] = false;
+                });
+                
+                document.getElementById('restartBtn').addEventListener('click', () => {
+                    this.restartGame();
+                });
+            }
+            
+            launchBall() {
+                if (!this.ballLaunched) {
+                    this.ballVelocity.set(
+                        (Math.random() - 0.5) * 0.1,
+                        0.15,
+                        -0.15
+                    );
+                    this.ballLaunched = true;
+                }
+            }
+            
+            updatePlatform() {
+                if (this.keys['ArrowLeft'] || this.keys['a'] || this.keys['ф']) {
+                    this.platform.position.x -= 0.2;
+                }
+                if (this.keys['ArrowRight'] || this.keys['d'] || this.keys['в']) {
+                    this.platform.position.x += 0.2;
+                }
+                
+                this.platform.position.x = Math.max(-8, Math.min(8, this.platform.position.x));
+                
+                if (!this.ballLaunched) {
+                    this.ball.position.x = this.platform.position.x;
+                }
+            }
+            
+            updateBall() {
+                if (!this.ballLaunched) return;
+                
+                this.ball.position.add(this.ballVelocity);
+                
+                if (this.ball.position.x <= -9 || this.ball.position.x >= 9) {
+                    this.ballVelocity.x *= -1;
+                    this.ball.position.x = Math.max(-8.9, Math.min(8.9, this.ball.position.x));
+                }
+                
+                if (this.ball.position.y >= 4.5) {
+                    this.ballVelocity.y *= -1;
+                    this.ball.position.y = 4.4;
+                }
+                
+                if (this.ball.position.z >= 9) {
+                    this.ballVelocity.z *= -1;
+                    this.ball.position.z = 8.9;
+                }
+                
+                if (this.ball.position.z <= -9) {
+                    this.ballVelocity.z *= -1;
+                    this.ball.position.z = -8.9;
+                }
+                
+                if (this.ball.position.y <= -4.5) {
+                    this.loseLife();
+                    return;
+                }
+                
+                this.checkPlatformCollision();
+                this.checkBlockCollisions();
+                
+                this.ballVelocity.multiplyScalar(1.0001);
+            }
+            
+            checkPlatformCollision() {
+                const ballBox = new THREE.Box3().setFromObject(this.ball);
+                const platformBox = new THREE.Box3().setFromObject(this.platform);
+                
+                if (ballBox.intersectsBox(platformBox)) {
+                    const relativeIntersectX = this.ball.position.x - this.platform.position.x;
+                    const normalizedRelativeIntersectX = relativeIntersectX / (3 / 2);
+                    
+                    this.ballVelocity.x = normalizedRelativeIntersectX * 0.15;
+                    this.ballVelocity.y = Math.abs(this.ballVelocity.y);
+                    this.ballVelocity.z = -Math.abs(this.ballVelocity.z);
+                    
+                    this.ball.position.y = this.platform.position.y + 0.8;
+                    
+                    const sparkColor = new THREE.Color(0x00ff88);
+                    this.createSpark(this.ball.position, sparkColor);
+                }
+            }
+            
+            checkBlockCollisions() {
+                for (let i = this.blocks.length - 1; i >= 0; i--) {
+                    const block = this.blocks[i];
+                    const ballBox = new THREE.Box3().setFromObject(this.ball);
+                    const blockBox = new THREE.Box3().setFromObject(block);
+                    
+                    if (ballBox.intersectsBox(blockBox)) {
+                        block.userData.health--;
+                        
+                        if (block.userData.health <= 0) {
+                            this.score += block.userData.points;
+                            this.scene.remove(block);
+                            this.blocks.splice(i, 1);
+                            
+                            this.createExplosion(block.position, new THREE.Color(block.material.color));
+                            
+                            if (this.blocks.length === 0) {
+                                this.nextLevel();
+                            }
+                        } else {
+                            block.material.color.setHex(0x888888);
+                        }
+                        
+                        const normal = this.getCollisionNormal(ballBox, blockBox);
+                        this.ballVelocity.reflect(normal);
+                        
+                        this.updateUI();
+                        break;
+                    }
+                }
+            }
+            
+            getCollisionNormal(ballBox, blockBox) {
+                const ballCenter = ballBox.getCenter(new THREE.Vector3());
+                const blockCenter = blockBox.getCenter(new THREE.Vector3());
+                const diff = new THREE.Vector3().subVectors(ballCenter, blockCenter);
+                
+                const blockSize = blockBox.getSize(new THREE.Vector3());
+                const overlap = new THREE.Vector3(
+                    ballBox.max.x - blockBox.min.x,
+                    ballBox.max.y - blockBox.min.y,
+                    ballBox.max.z - blockBox.min.z
+                );
+                
+                const minOverlap = Math.min(
+                    Math.abs(overlap.x),
+                    Math.abs(overlap.y),
+                    Math.abs(overlap.z)
+                );
+                
+                if (minOverlap === Math.abs(overlap.x)) {
+                    return new THREE.Vector3(diff.x > 0 ? 1 : -1, 0, 0);
+                } else if (minOverlap === Math.abs(overlap.y)) {
+                    return new THREE.Vector3(0, diff.y > 0 ? 1 : -1, 0);
+                } else {
+                    return new THREE.Vector3(0, 0, diff.z > 0 ? 1 : -1);
+                }
+            }
+            
+            createSpark(position, color) {
+                const sparkGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+                const sparkMaterial = new THREE.MeshBasicMaterial({ color: color });
+                const spark = new THREE.Mesh(sparkGeometry, sparkMaterial);
+                spark.position.copy(position);
+                
+                this.scene.add(spark);
+                
+                setTimeout(() => {
+                    this.scene.remove(spark);
+                }, 200);
+            }
+            
+            createExplosion(position, color) {
+                for (let i = 0; i < 10; i++) {
+                    const particleGeometry = new THREE.SphereGeometry(0.05 + Math.random() * 0.1, 4, 4);
+                    const particleMaterial = new THREE.MeshBasicMaterial({ color: color });
+                    const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                    
+                    particle.position.copy(position);
+                    particle.userData.velocity = new THREE.Vector3(
+                        (Math.random() - 0.5) * 0.3,
+                        (Math.random() - 0.5) * 0.3,
+                        (Math.random() - 0.5) * 0.3
+                    );
+                    particle.userData.life = 1.0;
+                    
+                    this.scene.add(particle);
+                    
+                    const animateParticle = () => {
+                        if (particle.userData.life > 0) {
+                            particle.position.add(particle.userData.velocity);
+                            particle.userData.life -= 0.02;
+                            particle.material.opacity = particle.userData.life;
+                            
+                            requestAnimationFrame(animateParticle);
+                        } else {
+                            this.scene.remove(particle);
+                        }
+                    };
+                    
+                    animateParticle();
+                }
+            }
+            
+            loseLife() {
+                this.lives--;
+                this.updateUI();
+                
+                if (this.lives <= 0) {
+                    this.endGame();
+                } else {
+                    this.resetBall();
+                }
+            }
+            
+            resetBall() {
+                this.ball.position.copy(this.platform.position);
+                this.ball.position.y += 0.5;
+                this.ballVelocity.set(0, 0, 0);
+                this.ballLaunched = false;
+            }
+            
+            nextLevel() {
+                this.level++;
+                this.updateUI();
+                
+                setTimeout(() => {
+                    this.createBlocks();
+                    this.resetBall();
+                }, 1000);
+            }
+            
+            endGame() {
+                this.gameOver = true;
+                document.getElementById('finalScore').textContent = `Очки: ${this.score}`;
+                document.getElementById('gameOver').style.display = 'block';
+            }
+            
+            restartGame() {
+                this.score = 0;
+                this.lives = 3;
+                this.level = 1;
+                this.ballLaunched = false;
+                this.gameOver = false;
+                
+                this.blocks.forEach(block => this.scene.remove(block));
+                this.blocks = [];
+                
+                this.createBlocks();
+                this.resetBall();
+                this.updateUI();
+                
+                document.getElementById('gameOver').style.display = 'none';
+            }
+            
+            updateUI() {
+                document.getElementById('score').textContent = `Очки: ${this.score}`;
+                document.getElementById('lives').textContent = `Жизни: ${this.lives}`;
+                document.getElementById('level').textContent = `Уровень: ${this.level}`;
+            }
+            
+            onWindowResize() {
+                this.camera.aspect = window.innerWidth / window.innerHeight;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                
+                if (!this.gameOver) {
+                    this.updatePlatform();
+                    this.updateBall();
+                    
+                    this.camera.position.x = Math.sin(Date.now() * 0.0005) * 3;
+                    this.camera.position.z = 15 + Math.cos(Date.now() * 0.0005) * 2;
+                    this.camera.lookAt(0, 0, 0);
+                }
+                
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+        
+        window.addEventListener('load', () => {
+            new Game3D();
+        });
+    </script>
+</body>
+</html>
